@@ -6,12 +6,59 @@ from idaes.core.util.misc import extract_data
 import pyomo.environ as pyo
 from pyomo.network import *
 from State_Block import Create_State_Block
+from State_Block_for_Mixer import Create_State_Block_for_Mixer
 
-#-----------------------------------------------------------------------------
+def M101_creater(m):
+    m.M101 = Block()
+    Create_State_Block_for_Mixer(m.M101)
+
+    # 物料守恒
+    def rule_mass_balance(b,p,c):
+        return m.M101.outlet.flow[p,c] == sum(m.M101.inlet_feed[f].flow[p,c] for f in m.M101.inlet_list)
+    m.M101.rule_mass_balance = Constraint(m.Phase, m.Comp,rule=rule_mass_balance)
+    
+    # 能量守恒
+    def rule_energy_balance(b):
+        return sum(m.M101.inlet_feed[f].total_enth for f in m.M101.inlet_list) == m.M101.outlet.total_enth
+    m.M101.rule_energy_balance = Constraint(rule = rule_energy_balance)
+    
+    # 等压
+    m.M101.rule_eq_pres = Constraint(expr = m.M101.outlet.P == 350000)
+
+    return m.M101
+
+#--------------------------- Flash 101 -----------------------------------
 def F101_creater(m):
     m.F101 = Block()
     Create_State_Block(m.F101)
+    m.F101.del_component(m.F101.Outlet)
 
+    # 分出两股物料
+    m.F101.virtual_stream_vap = Var(m.Phase,m.Comp,initialize = 1e-8)
+    def rule_virtual_stream_vap(b,p,c):
+        if p == 'Vap':
+            return m.F101.virtual_stream_vap[p,c] == m.F101.outlet.flow[p,c]
+        else:
+            return m.F101.virtual_stream_vap[p,c] == 1e-8
+    m.F101.rule_virtual_stream_vap = Constraint(m.Phase,m.Comp,rule = rule_virtual_stream_vap)
+    
+    m.F101.virtual_stream_liq = Var(m.Phase,m.Comp,initialize = 1e-8)
+    def rule_virtual_stream_liq(b,p,c):
+        if p == 'Liq':
+            return m.F101.virtual_stream_liq[p,c] == m.F101.outlet.flow[p,c]
+        else:
+            return m.F101.virtual_stream_liq[p,c] == 1e-8
+    m.F101.rule_virtual_stream_liq = Constraint(m.Phase,m.Comp,rule = rule_virtual_stream_liq)
+    
+    m.F101.Liq_Outlet = Port(initialize=[(m.F101.outlet.T, Port.Equality),
+                                         (m.F101.outlet.P, Port.Equality)])
+    m.F101.Liq_Outlet.add(m.F101.virtual_stream_liq,name="flow",rule=Port.Equality)
+    
+    m.F101.Vap_Outlet = Port(initialize=[(m.F101.outlet.T, Port.Equality),
+                                         (m.F101.outlet.P, Port.Equality)])
+    m.F101.Vap_Outlet.add(m.F101.virtual_stream_vap,name="flow",rule=Port.Equality)
+
+    
     # 物料守恒
     def rule_mass_comp(b, c):
         return m.F101.inlet.total_flow[c] == m.F101.outlet.total_flow[c]
@@ -25,7 +72,53 @@ def F101_creater(m):
     m.F101.rule_energy_balance = Constraint(rule = rule_energy_balance)
     return m.F101
 
-#-----------------------------------------------------------------------------
+
+#-------------------------------- Flash 102 -------------------------------------
+def F102_creater(m):
+    m.F102 = Block()
+    Create_State_Block(m.F102)
+    m.F102.del_component(m.F102.Outlet)
+
+    # 分出两股物料
+    m.F102.virtual_stream_vap = Var(m.Phase,m.Comp,initialize = 1e-8)
+    def rule_virtual_stream_vap(b,p,c):
+        if p == 'Vap':
+            return m.F102.virtual_stream_vap[p,c] == m.F102.outlet.flow[p,c]
+        else:
+            return m.F102.virtual_stream_vap[p,c] == 1e-8
+    m.F102.rule_virtual_stream_vap = Constraint(m.Phase,m.Comp,rule = rule_virtual_stream_vap)
+    
+    m.F102.virtual_stream_liq = Var(m.Phase,m.Comp,initialize = 1e-8)
+    def rule_virtual_stream_liq(b,p,c):
+        if p == 'Liq':
+            return m.F102.virtual_stream_liq[p,c] == m.F102.outlet.flow[p,c]
+        else:
+            return m.F102.virtual_stream_liq[p,c] == 1e-8
+    m.F102.rule_virtual_stream_liq = Constraint(m.Phase,m.Comp,rule = rule_virtual_stream_liq)
+    
+    m.F102.Liq_Outlet = Port(initialize=[(m.F102.outlet.T, Port.Equality),
+                                         (m.F102.outlet.P, Port.Equality)])
+    m.F102.Liq_Outlet.add(m.F102.virtual_stream_liq,name="flow",rule=Port.Equality)
+    
+    m.F102.Vap_Outlet = Port(initialize=[(m.F102.outlet.T, Port.Equality),
+                                         (m.F102.outlet.P, Port.Equality)])
+    m.F102.Vap_Outlet.add(m.F102.virtual_stream_vap,name="flow",rule=Port.Equality)
+
+    # 物料守恒
+    def rule_mass_comp(b, c):
+        return m.F102.inlet.total_flow[c] == m.F102.outlet.total_flow[c]
+    m.F102.rule_mass_balance = Constraint(m.Comp,rule=rule_mass_comp)
+
+    # 能量守恒
+    m.F102.Q = Var(initialize = 0)
+
+    def rule_energy_balance(b):
+        return m.F102.inlet.total_enth + m.F102.Q == m.F102.outlet.total_enth
+    m.F102.rule_energy_balance = Constraint(rule = rule_energy_balance)
+    
+    return m.F102
+
+#-------------------------------- Heater 101 -------------------------------------
 def H101_creater(m):
     m.H101 = Block()
     Create_State_Block(m.H101)
@@ -50,7 +143,7 @@ def H101_creater(m):
 
     return m.H101    
 
-#-----------------------------------------------------------------------------
+#--------------------------------- Reactor 101 ------------------------------------
 def R101_creater(m):
     m.R101 = Block()
     Create_State_Block(m.R101)
@@ -103,4 +196,43 @@ def R101_creater(m):
 
     return m.R101
 
+#----------------------------- Spliter 101 --------------------------------------
+def S101_creater(m):
+    m.S101 = Block()
+    Create_State_Block(m.S101)
+    m.S101.del_component(m.S101.eq_phase_equilibrium)
+    m.S101.del_component(m.S101.Outlet)
+
+    # 分出两股物料
+    m.S101.purge = Var(m.Phase,m.Comp,initialize = 1e-5)
+    def rule_purge(b,p,c):
+        return m.S101.purge[p,c] == 0.2 * m.S101.inlet.flow[p,c]
+    m.S101.rule_purge = Constraint(m.Phase,m.Comp,rule = rule_purge)
     
+    m.S101.recycle = Var(m.Phase,m.Comp,initialize = 1e-8)
+    def rule_recycle(b,p,c):
+        return m.S101.recycle[p,c] == 0.8 * m.S101.inlet.flow[p,c]
+    m.S101.rule_recycle = Constraint(m.Phase,m.Comp,rule = rule_recycle)
+    
+    m.S101.Purge = Port(initialize=[(m.S101.outlet.T, Port.Equality),
+                                         (m.S101.outlet.P, Port.Equality)])
+    m.S101.Purge.add(m.S101.purge, name="flow", rule=Port.Equality)
+    
+    m.S101.Recycle = Port(initialize=[(m.S101.outlet.T, Port.Equality),
+                                         (m.S101.outlet.P, Port.Equality)])
+    m.S101.Recycle.add(m.S101.recycle,  name="flow", rule=Port.Equality)
+    
+    # 物料守恒(出口气相)
+    def rule_mass_balance(b,p,c):
+        return m.S101.outlet.flow[p,c] == m.S101.inlet.flow[p,c]
+    m.S101.rule_mass_balance = Constraint(m.Phase, m.Comp,rule=rule_mass_balance)
+
+    # 等温等压
+    m.S101.rule_eq_temp = Constraint(expr = m.S101.inlet.T == m.S101.outlet.T)
+    m.S101.rule_eq_pres = Constraint(expr = m.S101.inlet.P == m.S101.outlet.P)
+    
+    return m.S101  
+
+#----------------------------- Mixer 101 --------------------------------------
+
+

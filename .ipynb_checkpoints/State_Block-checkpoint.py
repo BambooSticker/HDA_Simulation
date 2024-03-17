@@ -21,7 +21,7 @@ def Create_State_Block(b):
         b.flow = Var(
             b.Phase,
             b.Comp,
-            initialize=0.5,
+            initialize=0.12,
             bounds=(1e-12, 5)
             #unit=mol/s
         )
@@ -84,17 +84,17 @@ def Create_State_Block(b):
     b.inlet = pyo.Block(rule=state_rule)
     b.outlet = pyo.Block(rule=state_rule)
 
-# ----------------------- 构造用于network的Port --------------------------
-    inlet_var_list = [(b.inlet.flow, Port.Extensive),
-                (b.inlet.T, Port.Extensive),
-                (b.inlet.P, Port.Extensive)]
-    outlet_var_list = [(b.outlet.flow, Port.Extensive),
-            (b.outlet.T, Port.Extensive),
-            (b.outlet.P, Port.Extensive)]
+# ----------------------- 构造用于network的Port ------------------------
+    inlet_var_list = [(b.inlet.flow, Port.Equality),
+                (b.inlet.T, Port.Equality),
+                (b.inlet.P, Port.Equality)]
+    outlet_var_list = [(b.outlet.flow, Port.Equality),
+            (b.outlet.T, Port.Equality),
+            (b.outlet.P, Port.Equality)]
     
     b.Inlet = Port(initialize = inlet_var_list)
     b.Outlet = Port(initialize = outlet_var_list)
-
+# ---------------------------------------------------------------------
     
     # 安托因常数
     pressure_sat_coeff_data = {('benzene', 'A'): 4.202,
@@ -143,8 +143,7 @@ def Create_State_Block(b):
     # 相平衡约束（理想物系）
     def rule_Eq(b, c):
         return b.outlet.x[c]*b.pressure_sat[c] == b.outlet.y[c]*b.outlet.P
-    b.eq_phase_equilibrium = pyo.Constraint(b.Comp, rule=rule_Eq)
-
+    b.eq_phase_equilibrium = Constraint(b.Comp, rule=rule_Eq)
     #-----------------------------------------------------------------------------    
     # 泡点温度
     #b.temperature_bubble = Var(initialize=100,
@@ -183,19 +182,13 @@ def Create_State_Block(b):
                        b.pressure_sat_coeff_B[j] /
                        (b.temperature_dew +
                         b.pressure_sat_coeff_C[j]))
-    b._p_sat_dewT = Expression(b.Comp,
-                              rule=rule_psat_dew)
+    b._p_sat_dewT = Expression(b.Comp, rule=rule_psat_dew)
     
-#    def rule_dew_T(b):
-#        return sum(b.inlet.z[c]/(b.inlet.z['toluene']+b.inlet.z['benzene'])/b._p_sat_dewT[c] \
-#                  for c in ['benzene','toluene']) * b.outlet.P - 1 == 0
-
     def rule_dew_T(b):
         return sum(b.inlet.z[c]/b._p_sat_dewT[c] \
                   for c in b.Comp) * b.outlet.P - 1 == 0
     b.eq_T_dew = Constraint(rule = rule_dew_T)
-
-    #-----------------------------------------------------------------------------   
+# -----------------------------------------------------------------------------   
     
     b._teq = Var(initialize=400,
                     #unit = K,
@@ -219,11 +212,7 @@ def Create_State_Block(b):
                 b.outlet.T + b.temperature_bubble +
                 sqrt((b.outlet.T-b.temperature_bubble)**2 +
                      b.eps_1**2))
-    b._t1_constraint = Constraint(rule=rule_t1)
-
-    #calculate_variable_from_constraint(m._t1, m._t1_constraint)
-    #m._t1.fix()
-    #m.del_component(m._t1_constraint)    
+    b._t1_constraint = Constraint(rule=rule_t1)  
     
     # PSE paper Eqn 14
     # TODO : Add option for supercritical extension
@@ -233,10 +222,6 @@ def Create_State_Block(b):
               sqrt((b._t1-b.temperature_dew)**2 +
                    b.eps_2**2))
     b._teq_constraint = Constraint(rule=rule_teq)
-
-    #calculate_variable_from_constraint(m._teq, m._teq_constraint)
-    #m._teq.fix()
-    #m.del_component(m._teq_constraint)  
     
     # 安托因方程
     def rule_P_s(b, j):
