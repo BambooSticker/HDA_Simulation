@@ -13,10 +13,9 @@ $$C_6H_5CH_3 + H_2 \rightarrow C_6H_6 + CH_4$$
 A brief introduction of this project is as follows:
 -  **hda_flowsheet.py** and **HDA_Flowsheet.ipynb** contain the complete simulation and optimization process. A ConcreteModel is
 constructed as a blank flowsheet, then every unit model involved is created and linked with Arc. After
-setting neccesary variables to make sure the DOF of model is 0, select tear stream, tear the cycle, and
-leverage SequentialDecomposition to initialize the model. When initial simulation is successful, the
-operation conditions of several units are relaxed, and operation cost based on utility usage can be
-defined as the objective of the large-scale optimization problem. 
+selecting tear stream and tearing the cycle, Sequential Decomposition was leveraged to initialize the model.
+When initial simulation is successful, the operation conditions of several units are relaxed as decision variables,
+and operation cost based on utility usage can be defined as the objective of the large-scale optimization problem. 
 - **State_Block.py** is used to create some thermophysical properties for units, including Antoine equations,
 bubble and dew approximation, smooth VLE calculation, etc. Due to limited coding skills and time (XD), the state
 of Mixer unit is created using another **State_Block_for_Mixer.py** for its more-than-one inlets.
